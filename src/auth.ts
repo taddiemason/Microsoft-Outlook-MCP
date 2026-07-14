@@ -5,6 +5,11 @@ import {
   type ICachePlugin,
   type TokenCacheContext,
 } from "@azure/msal-node";
+import {
+  PersistenceCreator,
+  PersistenceCachePlugin,
+  DataProtectionScope,
+} from "@azure/msal-node-extensions";
 import { existsSync, readFileSync, writeFileSync, mkdirSync } from "node:fs";
 import { dirname } from "node:path";
 import type { Config } from "./config.js";
@@ -18,11 +23,49 @@ function log(msg: string): void {
 }
 
 /**
- * Persists the MSAL token cache to a JSON file on disk so refresh tokens
- * survive process restarts. The file contains sensitive tokens — it is
- * git-ignored and should be treated like a credential.
+ * Preferred cache: OS-native encrypted storage via @azure/msal-node-extensions.
+ *   - Windows -> DPAPI (encrypted, tied to the current Windows user)
+ *   - macOS   -> Keychain
+ *   - Linux   -> libsecret / GNOME Keyring
+ * The persistence is verified at startup; if the native backend can't be
+ * loaded or validated we fall back to the plaintext file so sign-in still
+ * works (just without encryption at rest).
  */
-function makeCachePlugin(cachePath: string): ICachePlugin {
+async function buildCachePlugin(config: Config): Promise<ICachePlugin> {
+  try {
+    const persistence = await PersistenceCreator.createPersistence({
+      cachePath: config.tokenCachePath,
+      // Used by the Windows DPAPI backend.
+      dataProtectionScope: DataProtectionScope.CurrentUser,
+      // Used by the macOS Keychain / Linux libsecret backends.
+      serviceName: "microsoft-outlook-mcp",
+      accountName: "token-cache",
+      // Do NOT silently store plaintext on Linux when libsecret is missing;
+      // let it throw so we hit the explicit fallback below (which logs).
+      usePlaintextFileOnLinux: false,
+    });
+
+    // Confirms the backend can actually read/write/encrypt before we rely on
+    // it. Throws or returns false when the native layer is unusable.
+    const okToUse = await persistence.verifyPersistence();
+    if (!okToUse) throw new Error("verifyPersistence() returned false");
+
+    log("token cache: OS-native encrypted storage (msal-node-extensions)");
+    return new PersistenceCachePlugin(persistence);
+  } catch (err) {
+    log(
+      `secure token storage unavailable (${(err as Error).message}); ` +
+        "falling back to a plaintext file with restricted permissions.",
+    );
+    return makePlaintextCachePlugin(config.tokenCachePath);
+  }
+}
+
+/**
+ * Fallback cache: a plaintext JSON file. Written with 0600 where the OS honors
+ * POSIX modes. Treat this file as a live credential.
+ */
+function makePlaintextCachePlugin(cachePath: string): ICachePlugin {
   return {
     async beforeCacheAccess(ctx: TokenCacheContext): Promise<void> {
       if (existsSync(cachePath)) {
@@ -42,17 +85,24 @@ export class AuthProvider {
   private readonly pca: PublicClientApplication;
   private readonly scopes: string[];
 
-  constructor(config: Config) {
-    this.scopes = config.scopes;
+  private constructor(pca: PublicClientApplication, scopes: string[]) {
+    this.pca = pca;
+    this.scopes = scopes;
+  }
+
+  /**
+   * Async factory — building the encrypted persistence backend is async, so
+   * construction must be awaited. Use this instead of `new AuthProvider(...)`.
+   */
+  static async create(config: Config): Promise<AuthProvider> {
+    const cachePlugin = await buildCachePlugin(config);
 
     const msalConfig: Configuration = {
       auth: {
         clientId: config.clientId,
         authority: `https://login.microsoftonline.com/${config.tenantId}`,
       },
-      cache: {
-        cachePlugin: makeCachePlugin(config.tokenCachePath),
-      },
+      cache: { cachePlugin },
       system: {
         loggerOptions: {
           loggerCallback: (level, message) => {
@@ -64,7 +114,7 @@ export class AuthProvider {
       },
     };
 
-    this.pca = new PublicClientApplication(msalConfig);
+    return new AuthProvider(new PublicClientApplication(msalConfig), config.scopes);
   }
 
   /**

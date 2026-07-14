@@ -116,6 +116,12 @@ Restart the client. Ask Claude to run `auth_status` or `whoami` to confirm.
 - Interactive **device-code sign-in** happens only in the separate
   `npm run login` step. Run it again any time a tool reports the session
   expired.
+- The token cache is stored in **OS-native encrypted storage** via
+  [`@azure/msal-node-extensions`](https://www.npmjs.com/package/@azure/msal-node-extensions):
+  DPAPI on Windows, Keychain on macOS, libsecret on Linux. The backend is
+  verified at startup; if the native layer can't be loaded, the server logs a
+  warning and falls back to a restricted-permission plaintext file so sign-in
+  still works.
 - All diagnostics go to **stderr**; **stdout** carries only the MCP JSON-RPC
   stream.
 
@@ -130,11 +136,18 @@ Restart the client. Ask Claude to run `auth_status` or `whoami` to confirm.
 
 ## Security notes
 
-- `.token-cache.json` contains live refresh/access tokens. It's git-ignored and
-  written with `0600` permissions. Treat it like a password; delete it (or run
-  `--logout`) to revoke local access.
-- This is a **public client** app — no secret is stored anywhere.
+- The token cache holds live refresh/access tokens. By default it is
+  **encrypted at rest** using your OS credential store (Windows DPAPI / macOS
+  Keychain / Linux libsecret), tied to your user account. Only if that native
+  backend is unavailable does it fall back to a git-ignored plaintext file
+  written with `0600` permissions — watch the startup log to see which is in
+  use. Either way, run `npm run login -- --logout` to revoke local access.
+- **Client ID and tenant ID are not secrets** — this is a **public client**
+  app, so no client secret is stored anywhere.
 - Scopes are delegated: the server can only do what your signed-in account can.
+- If you upgraded from an earlier version that used a plaintext
+  `.token-cache.json`, delete that file and re-run `npm run login` so the cache
+  is rewritten in the encrypted format.
 
 ## Project layout
 
@@ -143,7 +156,7 @@ src/
   index.ts          MCP server entry: registers tools, connects stdio transport
   login.ts          Standalone device-code sign-in (npm run login)
   config.ts         .env loader + config
-  auth.ts           MSAL public client, device code + silent refresh, disk cache
+  auth.ts           MSAL public client, device code + silent refresh, encrypted cache
   graph.ts          Minimal fetch-based Graph client (auth, paging, errors)
   tools/
     mail.ts         Mail tools

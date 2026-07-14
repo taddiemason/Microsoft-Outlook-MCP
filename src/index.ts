@@ -13,7 +13,7 @@ import { ok, fail, type ToolResult } from "./tools/util.js";
 
 async function main(): Promise<void> {
   const config = loadConfig();
-  const auth = new AuthProvider(config);
+  const auth = await AuthProvider.create(config);
   const graph = new GraphClient(auth);
 
   const server = new McpServer({

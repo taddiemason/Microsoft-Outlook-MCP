@@ -11,7 +11,7 @@ import { AuthProvider } from "./auth.js";
 
 async function main(): Promise<void> {
   const config = loadConfig();
-  const auth = new AuthProvider(config);
+  const auth = await AuthProvider.create(config);
 
   if (process.argv.includes("--logout")) {
     await auth.signOut();
