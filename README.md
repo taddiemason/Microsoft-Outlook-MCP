@@ -149,6 +149,60 @@ Restart the client. Ask Claude to run `auth_status` or `whoami` to confirm.
   `.token-cache.json`, delete that file and re-run `npm run login` so the cache
   is rewritten in the encrypted format.
 
+## Troubleshooting
+
+### Encrypted storage isn't being used (native module)
+
+The encrypted cache is provided by `@azure/msal-node-extensions`, which relies
+on a **native (N-API) addon**. `npm install` normally downloads a prebuilt
+binary for your platform. If none is available for your OS/CPU/Node version,
+the build falls back to compiling from source, which needs a toolchain.
+
+You'll know the native layer failed to load if the startup log shows:
+
+```
+[auth] secure token storage unavailable (...); falling back to a plaintext file...
+```
+
+instead of:
+
+```
+[auth] token cache: OS-native encrypted storage (msal-node-extensions)
+```
+
+The server still works in this state — it just stores tokens in a
+restricted-permission plaintext file. To get encryption working:
+
+- **Windows** — install the
+  [Visual Studio Build Tools](https://visualstudio.microsoft.com/downloads/)
+  ("Desktop development with C++"), then `npm rebuild`.
+- **macOS** — install the Xcode command line tools: `xcode-select --install`,
+  then `npm rebuild`.
+- **Linux** — install `build-essential`, `python3`, and libsecret headers
+  (Debian/Ubuntu: `sudo apt-get install build-essential python3 libsecret-1-dev`);
+  ensure a Secret Service provider (e.g. GNOME Keyring) is running, then
+  `npm rebuild`.
+
+After rebuilding, run `npm run login -- --status` and confirm the log reports
+OS-native encrypted storage.
+
+### `AADSTS7000218` or "public client flow" errors during login
+
+Your app registration is missing the public-client setting. In Azure →
+**Authentication** → **Advanced settings**, set **Allow public client flows**
+to **Yes**.
+
+### Tools return HTTP 401 / 403 after adding scopes
+
+The cached token predates the new permission. Re-run `npm run login` (and grant
+admin consent in Azure if your tenant requires it) so a fresh token carries the
+added scope.
+
+### `whoami` / tools say "Not signed in"
+
+Run `npm run login` in a terminal from the project folder. The MCP server never
+prompts for sign-in itself — it only reads the cached session.
+
 ## Project layout
 
 ```
