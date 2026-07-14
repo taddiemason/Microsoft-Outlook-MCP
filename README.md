@@ -15,9 +15,11 @@ the [Microsoft Graph API](https://learn.microsoft.com/graph/) using OAuth 2.0
 | Area | Tools |
 | --- | --- |
 | Account | `whoami`, `auth_status` |
-| Mail | `list_messages`, `get_message`, `send_mail`, `reply_to_message`, `update_message`, `move_message`, `delete_message`, `list_mail_folders` |
+| Mail | `list_messages`, `get_message`, `send_mail`, `reply_to_message`, `update_message`, `move_message`, `delete_message` |
 | Calendar | `list_events`, `get_event`, `create_event`, `update_event`, `delete_event`, `respond_to_event` |
 | Contacts | `list_contacts`, `get_contact`, `create_contact`, `update_contact`, `delete_contact` |
+| Folders | `list_mail_folders`, `create_mail_folder`, `rename_mail_folder`, `delete_mail_folder` |
+| Inbox rules | `list_message_rules`, `get_message_rule`, `create_message_rule`, `update_message_rule`, `delete_message_rule` |
 
 ## 1. Register an app in Azure AD (Entra ID)
 
@@ -40,6 +42,7 @@ the [Microsoft Graph API](https://learn.microsoft.com/graph/) using OAuth 2.0
    - `Mail.Send`
    - `Calendars.ReadWrite`
    - `Contacts.ReadWrite`
+   - `MailboxSettings.ReadWrite` (required for inbox rules)
    - `offline_access` (added automatically for refresh tokens)
 
    Click **Grant admin consent** if you're in an org tenant that requires it.
@@ -146,6 +149,7 @@ src/
     mail.ts         Mail tools
     calendar.ts     Calendar tools
     contacts.ts     Contacts tools
+    rules.ts        Mail folder management + inbox rule tools
     util.ts         ok()/fail() result helpers
 ```
 

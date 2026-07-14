@@ -8,6 +8,7 @@ import { GraphClient } from "./graph.js";
 import { registerMailTools } from "./tools/mail.js";
 import { registerCalendarTools } from "./tools/calendar.js";
 import { registerContactTools } from "./tools/contacts.js";
+import { registerRulesAndFolderTools } from "./tools/rules.js";
 import { ok, fail, type ToolResult } from "./tools/util.js";
 
 async function main(): Promise<void> {
@@ -69,6 +70,7 @@ async function main(): Promise<void> {
   registerMailTools(server, graph);
   registerCalendarTools(server, graph);
   registerContactTools(server, graph);
+  registerRulesAndFolderTools(server, graph);
 
   const transport = new StdioServerTransport();
   await server.connect(transport);

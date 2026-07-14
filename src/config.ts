@@ -59,7 +59,7 @@ export function loadConfig(): Config {
 
   const scopes = (
     process.env.OUTLOOK_SCOPES?.trim() ||
-    "User.Read Mail.ReadWrite Mail.Send Calendars.ReadWrite Contacts.ReadWrite"
+    "User.Read Mail.ReadWrite Mail.Send Calendars.ReadWrite Contacts.ReadWrite MailboxSettings.ReadWrite"
   )
     .split(/\s+/)
     .filter(Boolean);
